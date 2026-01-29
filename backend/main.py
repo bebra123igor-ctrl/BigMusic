@@ -22,25 +22,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Монтируем статику (фронтенд)
-FRONTEND_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend"))
-if os.path.exists(FRONTEND_DIR):
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
-@app.get("/")
-async def read_index():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-
-# Прокси для app.js и styles.css чтобы они были в корне
-@app.get("/{file_path:path}")
-async def serve_static(file_path: str):
-    file_full_path = os.path.join(FRONTEND_DIR, file_path)
-    if os.path.exists(file_full_path) and os.path.isfile(file_full_path):
-        return FileResponse(file_full_path)
-    # Если файл не найден, но это API - FastAPI сам обработает, 
-    # а если нет - вернем 404 или индекс
-    return JSONResponse(status_code=404, content={"detail": "Not found"})
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -213,6 +194,23 @@ async def api_download(track_id: str):
     if filepath and os.path.exists(filepath):
         return FileResponse(filepath, media_type="audio/mp4", filename=filename)
     raise HTTPException(status_code=404, detail="Track download failed")
+
+# Обслуживание фронтенда (в самом конце, чтобы не мешать API)
+FRONTEND_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend"))
+
+@app.get("/")
+async def read_index():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+@app.get("/{file_path:path}")
+async def serve_static(file_path: str):
+    file_full_path = os.path.join(FRONTEND_DIR, file_path)
+    if os.path.exists(file_full_path) and os.path.isfile(file_full_path):
+        return FileResponse(file_full_path)
+    # Если это не файл и не API, возвращаем индекс (для SPA)
+    if not file_path.startswith("api/"):
+        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
 
 if __name__ == "__main__":
     import uvicorn
