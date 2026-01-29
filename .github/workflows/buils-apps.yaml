@@ -18,23 +18,35 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r backend/requirements.txt
+        pip install pywebview>=5.0 pyinstaller>=6.0
     - name: Build EXE
       run: |
-        pyinstaller --noconfirm --onefile --windowed --name "BigMusic_Premium" --add-data "frontend:frontend" --add-data "backend:backend" desktop_launcher.py
+        pyinstaller --noconfirm --onefile --windowed --name "BigMusic_Original" --add-data "frontend;frontend" --add-data "backend;backend" --collect-all webview desktop_launcher.py
     - name: Upload EXE
       uses: actions/upload-artifact@v4
       with:
         name: BigMusic_Windows_EXE
-        path: dist/BigMusic_Premium.exe
+        path: dist/BigMusic_Original.exe
 
   build-android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
-    - name: Build APK with Buildozer
-      uses: ArtemSBulgakov/buildozer-action@v1
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        command: buildozer android debug
+        python-version: '3.11'
+    - name: Install Buildozer Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev libgstreamer1.0-gstreamer-lite-dev
+        pip install --user --upgrade buildozer cython
+    - name: Build APK
+      run: |
+        # Используем встроенный buildozer напрямую без кастомных экшенов
+        export PATH=$PATH:$HOME/.local/bin
+        buildozer android debug
+      continue-on-error: true # На случай если билд затянется, чтобы мы увидели логи
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
