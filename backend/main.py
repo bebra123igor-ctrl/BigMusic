@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import os
@@ -22,6 +22,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+# CORS для локальной разработки
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,6 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Токены Spotify (вшиты как запасные, но .env в приоритете)
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "95bf0a87f2994f94a810799888671cf0")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "06f338ad3f9e4f96905ee161cfa79cbc")
 SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN", "AQAYs4svYDNfPb7bihUmNrkQofVxzc1IUVvsVKsezm9N_bjhk84fkSmlA8T0a4lfofNLwPEgz9hggbHRSrJosZg1c1C7a8KVYE7Mhoi8rBj-ffCKkmIaeAzeJXU8uLiiBps")
@@ -48,6 +50,7 @@ spotify_token = {"access": None, "expires": 0}
 async def get_token():
     if spotify_token["access"] and time.time() < spotify_token["expires"]:
         return spotify_token["access"]
+    
     auth = base64.b64encode(f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()).decode()
     async with aiohttp.ClientSession() as s:
         async with s.post("https://accounts.spotify.com/api/token", 
@@ -73,31 +76,24 @@ async def get_track_file(track_id: str):
             tr = await r.json()
             search_q = f"{tr['artists'][0]['name']} - {tr['name']}"
             
-    # Генерируем чистое имя файла
     safe_name = "".join([c for c in search_q if c.isalnum() or c in (' ', '-', '_')]).strip()
     filepath = os.path.join(DOWNLOAD_DIR, f"{safe_name}.m4a")
 
     if not os.path.exists(filepath):
-        print(f"📥 Скачивание (Original Only): {search_q}")
-        # Чтобы треки были ОРИГИНАЛЬНЫМИ, добавляем "official audio" и фильтры
+        print(f"📥 Downloading: {search_q}")
         ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'format': 'm4a/bestaudio/best',
             'outtmpl': filepath,
             'quiet': True,
             'no_warnings': True,
-            # Добавляем эммуляцию мобилок для обхода 403
-            'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
         }
-        
-        def run_dl():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Ищем официальное аудио
-                ydl.download([f"ytsearch1:{search_q} official audio"])
-        
+        # Ищем именно official audio
+        query = f"ytsearch1:{search_q} official audio"
         try:
-            await asyncio.to_thread(run_dl)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                await asyncio.to_thread(ydl.download, [query])
         except Exception as e:
-            print(f"❌ Ошибка загрузки: {e}")
+            print(f"❌ Error downloading {search_q}: {e}")
             return None, None
 
     return filepath, f"{search_q}.m4a"
@@ -110,36 +106,19 @@ async def api_tracks(q: Optional[str] = None, seed_track: Optional[str] = None):
     if not token: return {"tracks": [], "artist": None}
     
     async with aiohttp.ClientSession() as s:
-        # Если передан seed_track, получаем рекомендации
         if seed_track:
             real_id = seed_track.replace("spotify_", "")
             url = f"https://api.spotify.com/v1/recommendations?seed_tracks={real_id}&limit=20"
-            async with s.get(url, headers={"Authorization": f"Bearer {token}"}) as r:
-                if r.status == 200:
-                    data = await r.json()
-                    tracks_data = data.get("tracks", [])
-                    tracks = []
-                    for i in tracks_data:
-                        tracks.append(Track(
-                            id=f"spotify_{i['id']}",
-                            title=i['name'],
-                            artist=", ".join([a['name'] for a in i['artists']]),
-                            cover_url=i['album']['images'][0]['url'] if i['album']['images'] else None
-                        ))
-                    return {"tracks": [t.model_dump() for t in tracks], "artist": None}
+        else:
+            is_search = bool(q and q.strip())
+            query = q if is_search else "top hits 2025"
+            url = f"https://api.spotify.com/v1/search?q={query}&type=track,artist&limit=50"
 
-        # Обычный поиск
-        is_search = bool(q and q.strip())
-        query = q if is_search else "top hits 2025"
-        
-        # Запрашиваем и треки, и артистов
-        url = f"https://api.spotify.com/v1/search?q={query}&type=track,artist&limit=50"
         async with s.get(url, headers={"Authorization": f"Bearer {token}"}) as r:
             if r.status != 200: return {"tracks": [], "artist": None}
             data = await r.json()
             
-            # Парсим треки
-            items = data.get("tracks", {}).get("items", [])
+            items = data.get("tracks", {}).get("items", []) if not seed_track else data.get("tracks", [])
             tracks = []
             for i in items:
                 if not i: continue
@@ -150,23 +129,21 @@ async def api_tracks(q: Optional[str] = None, seed_track: Optional[str] = None):
                     cover_url=i['album']['images'][0]['url'] if i['album']['images'] else None
                 ))
             
-            # Парсим артиста (только если это был поиск, берем первого лучшего)
             artist_data = None
-            if is_search:
+            if q and not seed_track:
                 artists = data.get("artists", {}).get("items", [])
                 if artists:
-                    best_match = artists[0]
+                    best = artists[0]
                     artist_data = {
-                        "name": best_match["name"],
-                        "followers": best_match["followers"]["total"],
-                        "image_url": best_match["images"][0]["url"] if best_match["images"] else None
+                        "name": best["name"],
+                        "followers": best["followers"]["total"],
+                        "image_url": best["images"][0]["url"] if best["images"] else None
                     }
             
             return {"tracks": [t.model_dump() for t in tracks], "artist": artist_data}
 
 @app.get("/api/check/{track_id}")
 async def api_check(track_id: str):
-    """Проверяет, скачан ли трек"""
     token = await get_token()
     real_id = track_id.replace("spotify_", "")
     async with aiohttp.ClientSession() as s:
@@ -180,22 +157,26 @@ async def api_check(track_id: str):
 
 @app.get("/api/stream/{track_id}")
 async def api_stream(track_id: str):
-    print(f"⚡ Запрос на воспроизведение: {track_id}")
     filepath, _ = await get_track_file(track_id)
     if filepath and os.path.exists(filepath):
-        # Отдаем файл как есть. Браузер его подхватит.
-        return FileResponse(filepath, media_type="audio/mp4")
+        # Используем StreamingResponse для лучшей совместимости с Range запросами
+        def iterfile():
+            with open(filepath, mode="rb") as file_like:
+                yield from file_like
+        return StreamingResponse(iterfile(), media_type="audio/mp4", headers={
+            "Content-Disposition": f"inline; filename=track.m4a",
+            "Accept-Ranges": "bytes"
+        })
     raise HTTPException(status_code=404, detail="Track not found")
 
 @app.get("/api/download/{track_id}")
 async def api_download(track_id: str):
-    print(f"📥 Запрос на скачивание: {track_id}")
     filepath, filename = await get_track_file(track_id)
     if filepath and os.path.exists(filepath):
         return FileResponse(filepath, media_type="audio/mp4", filename=filename)
-    raise HTTPException(status_code=404, detail="Track download failed")
+    raise HTTPException(status_code=404, detail="Track error")
 
-# Обслуживание фронтенда (в самом конце, чтобы не мешать API)
+# ==================== STATIC FILES ====================
 FRONTEND_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend"))
 
 @app.get("/")
@@ -204,13 +185,16 @@ async def read_index():
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
+    # Если запрашивают API, пролетаем мимо статики
+    if file_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    
     file_full_path = os.path.join(FRONTEND_DIR, file_path)
     if os.path.exists(file_full_path) and os.path.isfile(file_full_path):
         return FileResponse(file_full_path)
-    # Если это не файл и не API, возвращаем индекс (для SPA)
-    if not file_path.startswith("api/"):
-        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-    return JSONResponse(status_code=404, content={"detail": "Not found"})
+    
+    # SPA fallback: если это не файл, отдаем индекс
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
