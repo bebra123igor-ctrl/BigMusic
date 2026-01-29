@@ -1,0 +1,17 @@
+# Python dependencies
+__pycache__/
+*.py[cod]
+*$py.class
+backend/downloads/
+backend/venv/
+venv/
+.env
+
+# Mobile/IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db

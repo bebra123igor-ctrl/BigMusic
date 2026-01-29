@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigMusic - Premium Audio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="bg-animation"></div>
+
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-text">BIGMUSIC</span>
+            </div>
+
+            <div class="header-actions">
+                <div class="track-counter" id="trackCounter">
+                    <span id="trackCount">100M+</span>
+                </div>
+                <button class="refresh-btn" id="refreshBtn" title="Обновить список">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <path d="M23 4v6h-6M1 20v-6h6" />
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="search-container">
+            <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                </svg>
+                <input type="text" id="searchInput" placeholder="Поиск любимых треков и артистов..." autocomplete="off">
+            </div>
+        </div>
+
+        <div id="artistProfile" class="artist-profile hidden"></div>
+
+        <main class="tracks-container">
+            <div class="tracks-grid" id="tracksGrid"></div>
+
+            <div class="loading-state hidden" id="loadingState">
+                <div class="loader"></div>
+            </div>
+
+            <div class="empty-state hidden" id="emptyState">
+                <div class="empty-icon">🎧</div>
+                <h3>Ничего не нашли</h3>
+                <p>Попробуйте другой запрос</p>
+            </div>
+        </main>
+
+        <!-- Player Bar -->
+        <div class="now-playing-bar hidden" id="nowPlayingBar">
+            <!-- Top progress bar removed, moved inside content -->
+
+            <div class="now-playing-content">
+                <div class="now-playing-left">
+                    <img id="nowPlayingCover" class="now-playing-cover" src="" alt="">
+                    <div class="now-playing-info">
+                        <div class="now-playing-title" id="nowPlayingTitle">-</div>
+                        <div class="now-playing-artist" id="nowPlayingArtist">-</div>
+                    </div>
+                </div>
+
+                <div class="now-playing-center">
+                    <div class="now-playing-controls">
+                        <button class="control-btn" id="prevBtn" title="Назад">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                            </svg>
+                        </button>
+                        <button class="play-btn" id="playPauseBtn">
+                            <svg class="play-icon" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                            <svg class="pause-icon hidden" viewBox="0 0 24 24">
+                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                            </svg>
+                        </button>
+                        <button class="control-btn" id="nextBtn" title="Вперед">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="time-info">
+                        <span id="currentTime" class="time-label">0:00</span>
+                        <div class="now-playing-progress" id="progressContainer">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <span id="totalTime" class="time-label">0:00</span>
+                    </div>
+                </div>
+
+                <div class="now-playing-right">
+                    <div class="volume-control">
+                        <svg class="volume-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+                        </svg>
+                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audioPlayer"></audio>
+    <!-- Download Progress Modal -->
+    <div id="downloadModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="loading-icon">
+                    <svg viewBox="0 0 24 24" class="spinner">
+                        <path
+                            d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </div>
+                <h3>Подготовка трека</h3>
+            </div>
+            <p>Это первая загрузка песни. Мы ищем оригинал и подготавливаем аудио в высоком качестве. Это займет около
+                5-10 секунд...</p>
+            <div class="progress-container">
+                <div id="downloadProgressBar" class="progress-fill"></div>
+            </div>
+            <div id="downloadStatus" class="status-text">Поиск источника...</div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
