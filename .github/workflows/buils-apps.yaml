@@ -20,7 +20,7 @@ jobs:
         pip install -r backend/requirements.txt
     - name: Build EXE
       run: |
-        pyinstaller --noconfirm --onefile --windowed --name "BigMusic_Premium" --add-data "frontend;frontend" --add-data "backend;backend" desktop_launcher.py
+        pyinstaller --noconfirm --onefile --windowed --name "BigMusic_Premium" --add-data "frontend:frontend" --add-data "backend:backend" desktop_launcher.py
     - name: Upload EXE
       uses: actions/upload-artifact@v4
       with:
@@ -34,7 +34,7 @@ jobs:
     - name: Build APK with Buildozer
       uses: ArtemSBulgakov/buildozer-action@v1
       with:
-        save_cache: true
+        command: buildozer android debug
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
