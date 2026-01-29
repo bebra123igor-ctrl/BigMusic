@@ -39,14 +39,14 @@ jobs:
     - name: Install Buildozer Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev libgstreamer1.0-gstreamer-lite-dev
+        sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good
         pip install --user --upgrade buildozer cython
     - name: Build APK
       run: |
-        # Используем встроенный buildozer напрямую без кастомных экшенов
         export PATH=$PATH:$HOME/.local/bin
-        buildozer android debug
-      continue-on-error: true # На случай если билд затянется, чтобы мы увидели логи
+        # Сначала просто инициализируем, если нужно, и запускаем билд
+        yes | buildozer android debug
+      continue-on-error: true
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
