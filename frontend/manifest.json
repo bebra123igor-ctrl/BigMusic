@@ -1,0 +1,17 @@
+{
+    "name": "BigMusic Premium",
+    "short_name": "BigMusic",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#050505",
+    "theme_color": "#38bdf8",
+    "description": "Premium Music Streaming App",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3844/3844724.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

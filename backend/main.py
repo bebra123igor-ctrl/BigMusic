@@ -86,14 +86,31 @@ async def get_track_file(track_id: str):
             'outtmpl': filepath,
             'quiet': True,
             'no_warnings': True,
+            'nocheckcertificate': True,
+            'ignoreerrors': True,
+            # Добавляем заголовки для обхода простых блокировок
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
-        # Ищем именно official audio
-        query = f"ytsearch1:{search_q} official audio"
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                await asyncio.to_thread(ydl.download, [query])
-        except Exception as e:
-            print(f"❌ Error downloading {search_q}: {e}")
+        # Пробуем найти сначала на SoundCloud (там меньше блокировок), потом на YT
+        queries = [
+            f"scsearch1:{search_q}", 
+            f"ytsearch1:{search_q} official audio"
+        ]
+        
+        success = False
+        for query in queries:
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = await asyncio.to_thread(ydl.extract_info, query, download=True)
+                    if info and 'entries' in info and len(info['entries']) > 0:
+                        success = True
+                        break
+            except Exception as e:
+                print(f"⚠️ Source failed ({query}): {e}")
+                continue
+        
+        if not success:
+            print(f"❌ All sources failed for {search_q}")
             return None, None
 
     return filepath, f"{search_q}.m4a"
